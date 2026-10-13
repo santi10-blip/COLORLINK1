@@ -13,16 +13,20 @@ import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { AdminPanel } from './components/admin/AdminPanel';
 import { ArchitectureViewer } from './components/architecture/ArchitectureViewer';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { UserProfileModal } from './components/profile/UserProfileModal';
+import { WelcomeEmailViewerModal } from './components/auth/WelcomeEmailViewerModal';
 
 import { 
   Project, 
   Client, 
   User, 
   UserRole, 
-  InventoryItem 
+  InventoryItem,
+  WelcomeEmailMessage
 } from './types';
 import { CURRENT_USER } from './data/initialData';
 import { apiService } from './services/apiService';
+import { generateWelcomeEmail } from './services/emailService';
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -109,6 +113,9 @@ export default function App() {
   // Modals state
   const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [isWelcomeEmailModalOpen, setIsWelcomeEmailModalOpen] = useState<boolean>(false);
+  const [welcomeEmailToView, setWelcomeEmailToView] = useState<WelcomeEmailMessage | null>(null);
 
   // Initial HTTP Data Fetching from Supabase / REST API
   useEffect(() => {
@@ -259,6 +266,8 @@ export default function App() {
         currentUser={currentUser}
         onRoleChange={handleRoleChange}
         onOpenNewProjectWizard={() => setIsWizardOpen(true)}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
+        onLogout={handleLogout}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         pendingCount={pendingCount}
@@ -277,6 +286,7 @@ export default function App() {
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           onLogout={handleLogout}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
           counts={{
             clients: visibleClients.length,
             projects: visibleProjects.length,
@@ -378,6 +388,60 @@ export default function App() {
           project={selectedProject}
           onClose={() => setSelectedProject(null)}
           onUpdateProject={handleUpdateProject}
+        />
+      )}
+
+      {/* Ventana Modal con Toda la Información del Perfil de Usuario */}
+      {currentUser && (
+        <UserProfileModal
+          user={currentUser}
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          onLogout={handleLogout}
+          onUpdateUser={(updated) => {
+            setCurrentUser(updated);
+            try {
+              localStorage.setItem('colorlink_auth_user', JSON.stringify(updated));
+            } catch {
+              // storage error
+            }
+          }}
+          onOpenWelcomeEmail={async () => {
+            try {
+              const emails = await apiService.getDispatchedEmails();
+              const match = emails.find(e => e.to.toLowerCase() === currentUser.email.toLowerCase()) || emails[0];
+              if (match) {
+                setWelcomeEmailToView(match);
+                setIsWelcomeEmailModalOpen(true);
+              } else {
+                const fallbackEmail = generateWelcomeEmail({
+                  name: currentUser.name,
+                  email: currentUser.email,
+                  companyName: currentUser.companyName || 'COLORLINK Enterprise Tech',
+                  taxId: currentUser.taxId,
+                  phone: currentUser.phone || '+57 300 123 4567',
+                  role: currentUser.role,
+                  department: currentUser.department,
+                  position: currentUser.position,
+                  password: '••••••••',
+                });
+                setWelcomeEmailToView(fallbackEmail);
+                setIsWelcomeEmailModalOpen(true);
+              }
+            } catch {
+              // fallback
+            }
+          }}
+          userProjectsCount={visibleProjects.length}
+        />
+      )}
+
+      {/* Visor de Saludo de Bienvenida Corporativo desde el Perfil */}
+      {welcomeEmailToView && isWelcomeEmailModalOpen && (
+        <WelcomeEmailViewerModal
+          email={welcomeEmailToView}
+          isOpen={isWelcomeEmailModalOpen}
+          onClose={() => setIsWelcomeEmailModalOpen(false)}
         />
       )}
     </div>

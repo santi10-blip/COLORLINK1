@@ -377,6 +377,76 @@ async function sendWelcomeEmailViaTransport(emailMessage: any) {
   return true;
 }
 
+// URL oficial del webhook de n8n configurado para enviar saludo de bienvenida
+export const N8N_WELCOME_WEBHOOK_URL = 'https://santi2.app.n8n.cloud/webhook/bienvenida-usuario';
+export const N8N_WELCOME_WEBHOOK_TEST_URL = 'https://santi2.app.n8n.cloud/webhook-test/bienvenida-usuario';
+
+async function triggerN8nWelcomeWebhook(payload: Record<string, any>) {
+  const report: {
+    production: { ok: boolean; status?: number; body?: string; error?: string };
+    test: { ok: boolean; status?: number; body?: string; error?: string };
+    n8nDiagnosticNotice?: string;
+    n8nMessage?: string;
+  } = {
+    production: { ok: false },
+    test: { ok: false },
+  };
+
+  // 1. Invocar Webhook Oficial de Producción
+  try {
+    const response = await fetch(N8N_WELCOME_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'COLORLINK-Enterprise/2.4',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      body: JSON.stringify(payload)
+    });
+    const responseText = await response.text().catch(() => '');
+    report.production = { ok: response.ok, status: response.status, body: responseText };
+    console.log(`[n8n Webhook Prod] ${N8N_WELCOME_WEBHOOK_URL} => Status: ${response.status}. Detalle: ${responseText.slice(0, 120)}`);
+
+    try {
+      const parsed = JSON.parse(responseText);
+      if (parsed.message) {
+        report.n8nMessage = parsed.message;
+      }
+    } catch {
+      // no es JSON
+    }
+
+    if (response.status === 500 && responseText.includes('No authentication data defined on node')) {
+      report.n8nDiagnosticNotice = 'En n8n el nodo Webhook tiene Autenticación activada pero sin credencial. Debe cambiarse a Authentication: "None" en n8n.';
+    }
+  } catch (err: any) {
+    console.warn(`[n8n Webhook Prod Error]:`, err?.message || err);
+    report.production = { ok: false, error: err?.message };
+  }
+
+  // 2. Solo invocar Webhook de prueba si Producción no está disponible o responde 404
+  if (!report.production.ok && report.production.status === 404) {
+    try {
+      const testResponse = await fetch(N8N_WELCOME_WEBHOOK_TEST_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'COLORLINK-Enterprise/2.4',
+          'Accept': 'application/json, text/plain, */*'
+        },
+        body: JSON.stringify(payload)
+      });
+      const testText = await testResponse.text().catch(() => '');
+      report.test = { ok: testResponse.ok, status: testResponse.status, body: testText };
+      console.log(`[n8n Webhook Test] ${N8N_WELCOME_WEBHOOK_TEST_URL} => Status: ${testResponse.status}. Detalle: ${testText.slice(0, 120)}`);
+    } catch (err: any) {
+      report.test = { ok: false, error: err?.message };
+    }
+  }
+
+  return report;
+}
+
 app.post('/api/v1/auth/login', (req, res) => {
   const { email, password } = req.body;
   const user = store.users.find((u: any) => u.email?.toLowerCase() === email?.toLowerCase());
@@ -491,6 +561,36 @@ const handleRegisterUser = async (req: express.Request, res: express.Response) =
     await sendWelcomeEmailViaTransport(welcomeEmail);
     store.dispatched_emails.unshift(welcomeEmail);
 
+    // Disparar Webhook oficial de n8n para envío automático de bienvenida
+    const n8nReport = await triggerN8nWelcomeWebhook({
+      event: 'USER_REGISTRATION',
+      name: newUser.name,
+      email: newUser.email,
+      companyName: client.company_name || companyName,
+      nombre: newUser.name,
+      correo: newUser.email,
+      empresa: client.company_name || companyName,
+      taxId: client.tax_id,
+      nit: client.tax_id,
+      phone: phone || client.phone,
+      telefono: phone || client.phone,
+      role: newUser.role,
+      department: newUser.department,
+      position: position || newUser.department,
+      cargo: position || newUser.department,
+      industrySector: client.industry_sector || industrySector,
+      city: client.city || 'Bogotá D.C.',
+      ciudad: client.city || 'Bogotá D.C.',
+      activationCode: welcomeEmail.activationCode,
+      temporaryPassword: password || 'ColorLink2026*',
+      registeredAt: new Date().toISOString(),
+      subject: welcomeEmail.subject,
+      textContent: welcomeEmail.textContent,
+      htmlContent: welcomeEmail.htmlContent,
+      source: 'COLORLINK Enterprise - Solicitud de Acceso',
+      webhookUrl: N8N_WELCOME_WEBHOOK_URL
+    });
+
     saveStore();
 
     const token = `token-${Date.now()}`;
@@ -513,7 +613,8 @@ const handleRegisterUser = async (req: express.Request, res: express.Response) =
         clientId: client.id,
       },
       welcomeEmail,
-      access_token: token
+      access_token: token,
+      n8nReport
     });
   } catch (err: any) {
     console.error('Error en /auth/register:', err);
@@ -523,6 +624,41 @@ const handleRegisterUser = async (req: express.Request, res: express.Response) =
 
 app.post('/api/v1/auth/register', handleRegisterUser);
 app.post('/api/auth/register', handleRegisterUser);
+
+// Disparador directo y diagnóstico del Webhook de n8n
+app.post('/api/v1/n8n/trigger', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const report = await triggerN8nWelcomeWebhook(payload);
+    return res.json({
+      success: true,
+      webhookUrl: N8N_WELCOME_WEBHOOK_URL,
+      webhookTestUrl: N8N_WELCOME_WEBHOOK_TEST_URL,
+      report
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+app.get('/api/v1/n8n/status', async (req, res) => {
+  try {
+    // Probar conectividad con n8n
+    const testPayload = {
+      event: 'CONNECTIVITY_PING',
+      pingAt: new Date().toISOString(),
+      source: 'COLORLINK Ping Test'
+    };
+    const report = await triggerN8nWelcomeWebhook(testPayload);
+    return res.json({
+      webhookUrl: N8N_WELCOME_WEBHOOK_URL,
+      webhookTestUrl: N8N_WELCOME_WEBHOOK_TEST_URL,
+      report
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message });
+  }
+});
 
 // Reenvío o prueba de correo de bienvenida
 const handleSendWelcomeEmail = async (req: express.Request, res: express.Response) => {
@@ -546,6 +682,23 @@ const handleSendWelcomeEmail = async (req: express.Request, res: express.Respons
 
     await sendWelcomeEmailViaTransport(welcomeEmail);
     store.dispatched_emails.unshift(welcomeEmail);
+
+    // Disparar Webhook de n8n
+    await triggerN8nWelcomeWebhook({
+      event: 'WELCOME_EMAIL_DISPATCH',
+      name: welcomeEmail.recipientName,
+      email: welcomeEmail.to,
+      companyName: welcomeEmail.companyName,
+      role: welcomeEmail.role,
+      activationCode: welcomeEmail.activationCode,
+      subject: welcomeEmail.subject,
+      htmlContent: welcomeEmail.htmlContent,
+      textContent: welcomeEmail.textContent,
+      sentAt: welcomeEmail.sentAt,
+      source: 'COLORLINK Email Dispatcher',
+      webhookUrl: N8N_WELCOME_WEBHOOK_URL
+    });
+
     saveStore();
 
     return res.json({

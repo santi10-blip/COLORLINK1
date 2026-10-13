@@ -38,6 +38,47 @@ export function generateUUID(): string {
   });
 }
 
+export const N8N_WELCOME_WEBHOOK_URL = 'https://santi2.app.n8n.cloud/webhook/bienvenida-usuario';
+export const N8N_WELCOME_WEBHOOK_TEST_URL = 'https://santi2.app.n8n.cloud/webhook-test/bienvenida-usuario';
+
+export async function sendN8nWelcomeWebhook(payload: Record<string, any>): Promise<{ ok: boolean; status?: number; report?: any; error?: string }> {
+  let backendReport: any = null;
+  // 1. Despachar a través del backend proxy (seguro contra CORS y bloqueos de red)
+  try {
+    const proxyRes = await fetch('/api/v1/n8n/trigger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (proxyRes.ok) {
+      const data = await proxyRes.json();
+      backendReport = data.report;
+    }
+  } catch (proxyErr) {
+    console.warn('n8n proxy dispatch notice:', proxyErr);
+  }
+
+  // 2. Despachar directamente desde el cliente web al webhook oficial
+  try {
+    const res = await fetch(N8N_WELCOME_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok, status: res.status, report: backendReport };
+  } catch (err: any) {
+    console.warn('n8n Webhook direct client call notice:', err?.message || err);
+    return { 
+      ok: backendReport?.production?.ok || false, 
+      status: backendReport?.production?.status, 
+      report: backendReport, 
+      error: err?.message 
+    };
+  }
+}
+
 function mapSupabaseProject(row: any): Project {
   const cond = Array.isArray(row.operational_conditions) 
     ? row.operational_conditions[0] 
@@ -474,11 +515,12 @@ class ApiService {
   }
 
   // --- REGISTRO DE USUARIOS & ENVÍO DE SALUDO DE BIENVENIDA ---
-  async registerUser(data: UserRegistrationData): Promise<{ user: User; welcomeEmail: WelcomeEmailMessage; token: string }> {
+  async registerUser(data: UserRegistrationData): Promise<{ user: User; welcomeEmail: WelcomeEmailMessage; token: string; n8nReport?: any }> {
     const cleanRole: UserRole = data.role === 'Auditor' ? 'Auditor' : data.role === 'Administrador' ? 'Administrador' : 'Cliente';
     let registeredUser: User | null = null;
     let welcomeEmail: WelcomeEmailMessage | null = null;
     let token = `token-${Date.now()}`;
+    let n8nReport: any = null;
 
     // 1. Intentar registrar a través de la API REST del backend
     try {
@@ -494,6 +536,7 @@ class ApiService {
           registeredUser = json.user;
           welcomeEmail = json.welcomeEmail;
           token = json.access_token || token;
+          n8nReport = json.n8nReport || null;
         }
       }
     } catch (err) {
@@ -570,6 +613,41 @@ class ApiService {
           console.warn('Error insertando usuario en Supabase:', supabaseErr);
         }
       }
+
+      // Fallback: Si el backend no ejecutó el webhook, invocarlo desde cliente una única vez
+      try {
+        const whRes = await sendN8nWelcomeWebhook({
+          event: 'USER_REGISTRATION',
+          name: registeredUser.name,
+          email: registeredUser.email,
+          companyName: data.companyName,
+          nombre: registeredUser.name,
+          correo: registeredUser.email,
+          empresa: data.companyName,
+          taxId: data.taxId,
+          nit: data.taxId,
+          phone: data.phone,
+          telefono: data.phone,
+          role: registeredUser.role,
+          department: registeredUser.department,
+          position: data.position,
+          cargo: data.position,
+          industrySector: data.industrySector,
+          city: data.city,
+          ciudad: data.city,
+          activationCode: welcomeEmail.activationCode,
+          temporaryPassword: data.password || 'ColorLink2026*',
+          registeredAt: new Date().toISOString(),
+          subject: welcomeEmail.subject,
+          htmlContent: welcomeEmail.htmlContent,
+          textContent: welcomeEmail.textContent,
+          source: 'COLORLINK Frontend Client - Fallback',
+          webhookUrl: N8N_WELCOME_WEBHOOK_URL
+        });
+        n8nReport = whRes.report;
+      } catch (whErr) {
+        console.warn('n8n Webhook trigger warning:', whErr);
+      }
     }
 
     // 3. Guardar usuario en la lista de usuarios registrados en localStorage
@@ -593,7 +671,7 @@ class ApiService {
       'USER_REGISTERED',
       'Cliente',
       registeredUser.id,
-      `Nuevo usuario registrado: ${registeredUser.name} (${cleanRole}) para ${data.companyName}. Saludo de bienvenida enviado a ${data.email}.`,
+      `Nuevo usuario registrado: ${registeredUser.name} (${cleanRole}) para ${data.companyName}. Saludo de bienvenida enviado a ${data.email} vía n8n webhook.`,
       registeredUser
     );
 
@@ -601,6 +679,7 @@ class ApiService {
       user: registeredUser,
       welcomeEmail,
       token,
+      n8nReport,
     };
   }
 

@@ -12,6 +12,12 @@ export interface User {
   companyName?: string;
   clientId?: string;
   lastLogin?: string;
+  phone?: string;
+  position?: string;
+  taxId?: string;
+  city?: string;
+  activationCode?: string;
+  created_at?: string;
 }
 
 export interface Company {

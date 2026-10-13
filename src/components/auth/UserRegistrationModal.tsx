@@ -20,7 +20,7 @@ import {
   Layers
 } from 'lucide-react';
 import { UserRole, UserRegistrationData, User, WelcomeEmailMessage } from '../../types';
-import { apiService } from '../../services/apiService';
+import { apiService, N8N_WELCOME_WEBHOOK_URL, sendN8nWelcomeWebhook } from '../../services/apiService';
 import { WelcomeEmailViewerModal } from './WelcomeEmailViewerModal';
 
 interface UserRegistrationModalProps {
@@ -56,7 +56,6 @@ export const UserRegistrationModal: React.FC<UserRegistrationModalProps> = ({
 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [sendWelcomeEmailChecked, setSendWelcomeEmailChecked] = useState(true);
 
   // Flow State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,6 +66,7 @@ export const UserRegistrationModal: React.FC<UserRegistrationModalProps> = ({
   const [registeredUser, setRegisteredUser] = useState<User | null>(null);
   const [dispatchedEmail, setDispatchedEmail] = useState<WelcomeEmailMessage | null>(null);
   const [isPreviewEmailOpen, setIsPreviewEmailOpen] = useState(false);
+  const [n8nResponseReport, setN8nResponseReport] = useState<any>(null);
 
   if (!isOpen) return null;
 
@@ -107,24 +107,22 @@ export const UserRegistrationModal: React.FC<UserRegistrationModalProps> = ({
 
     try {
       setIsSubmitting(true);
-      setSubmitStepText('Creando credenciales seguras de acceso...');
+      setSubmitStepText(`Registrando cuenta y activando flujo oficial en n8n (${formData.email})...`);
 
-      // Usar contraseña por defecto si está vacía
       const finalPassword = formData.password?.trim() || 'ColorLink2026*';
-
-      await new Promise(r => setTimeout(r, 400));
-      setSubmitStepText(`Generando saludo oficial de bienvenida y plantilla corporativa para ${formData.email}...`);
 
       const result = await apiService.registerUser({
         ...formData,
         password: finalPassword,
       });
 
-      await new Promise(r => setTimeout(r, 400));
-      setSubmitStepText(`Enviando correo de bienvenida a ${formData.email}...`);
+      setSubmitStepText(`Confirmando respuesta de n8n para ${formData.email}...`);
 
       setRegisteredUser(result.user);
       setDispatchedEmail(result.welcomeEmail);
+      if (result.n8nReport) {
+        setN8nResponseReport(result.n8nReport);
+      }
 
       onRegistrationSuccess(result.user, result.welcomeEmail);
     } catch (err: any) {
@@ -237,6 +235,42 @@ export const UserRegistrationModal: React.FC<UserRegistrationModalProps> = ({
                     <p className="text-[11px] text-slate-500 leading-snug">
                       El correo incluye el saludo oficial de la dirección técnica, el código de verificación único (<strong>{dispatchedEmail.activationCode}</strong>) y las instrucciones de uso de la plataforma.
                     </p>
+
+                    {/* Notificación n8n Webhook Dinámica */}
+                    {n8nResponseReport?.n8nMessage === 'correo ya enviado anteriormente' ? (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] space-y-1.5 animate-in fade-in">
+                        <div className="flex items-center space-x-1.5 font-bold text-amber-900">
+                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>Respuesta de tu flujo n8n: <em>"correo ya enviado anteriormente"</em></span>
+                        </div>
+                        <p className="text-amber-800 leading-relaxed">
+                          El webhook de n8n recibió la petición correctamente, pero tu flujo tiene una condición interna que <strong>no reenvía correos a direcciones ya procesadas ({dispatchedEmail.to})</strong>.
+                        </p>
+                        <p className="text-amber-700 text-[10px] bg-amber-100/70 p-1.5 rounded-md">
+                          💡 <strong>Para recibirlo de nuevo:</strong> Revisa tu carpeta de <strong>Spam / Correo no deseado</strong> o elimina la fila con este correo en la base de datos / hoja de cálculo de tu flujo en n8n.
+                        </p>
+                      </div>
+                    ) : n8nResponseReport?.n8nMessage === 'correo enviado' ? (
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] space-y-1.5 animate-in fade-in">
+                        <div className="flex items-center space-x-1.5 font-bold text-emerald-900">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>Respuesta de tu flujo n8n: <em>"correo enviado"</em> con éxito</span>
+                        </div>
+                        <p className="text-emerald-800 leading-relaxed">
+                          El nodo de correo de n8n se ejecutó y remitió el mensaje a <strong className="font-mono">{dispatchedEmail.to}</strong>.
+                        </p>
+                        <p className="text-emerald-700 text-[10px] bg-emerald-100/70 p-1.5 rounded-md">
+                          📬 <strong>Nota:</strong> Si no lo ves en tu bandeja de entrada en los próximos minutos, por favor revisa las pestañas <strong>Spam</strong> o <strong>Promociones</strong>.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900 text-[11px]">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span>
+                          <strong>Webhook n8n conectado:</strong> Solicitud remitida a <code className="font-mono text-[10px] bg-indigo-100 px-1 py-0.5 rounded break-all">{N8N_WELCOME_WEBHOOK_URL}</code>.
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -518,21 +552,9 @@ export const UserRegistrationModal: React.FC<UserRegistrationModalProps> = ({
                   </div>
                 </div>
 
-                {/* NOTA DEL CORREO DE BIENVENIDA & TÉRMINOS */}
-                <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200/80 space-y-2.5">
-                  <label className="flex items-center space-x-2 text-xs font-semibold text-blue-950 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={sendWelcomeEmailChecked}
-                      onChange={(e) => setSendWelcomeEmailChecked(e.target.checked)}
-                      className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                    />
-                    <span>
-                      Enviar saludo oficial de bienvenida y credenciales al correo ingresado ({formData.email || 'correo corporativo'})
-                    </span>
-                  </label>
-
-                  <label className="flex items-center space-x-2 text-[11px] text-slate-600 cursor-pointer">
+                {/* TÉRMINOS Y CONDICIONES */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <label className="flex items-center space-x-2.5 text-xs text-slate-700 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={formData.acceptTerms}
@@ -559,12 +581,13 @@ export const UserRegistrationModal: React.FC<UserRegistrationModalProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/25 flex items-center space-x-2 transition-all hover:scale-[1.01] cursor-pointer disabled:opacity-70"
+                    title="Al hacer clic, se envía la petición al webhook de n8n: https://santi2.app.n8n.cloud/webhook/bienvenida-usuario"
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/25 flex items-center space-x-2 transition-all hover:scale-[1.01] cursor-pointer disabled:opacity-70"
                   >
                     {isSubmitting ? (
                       <>
                         <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>{submitStepText || 'Procesando...'}</span>
+                        <span>{submitStepText || 'Procesando n8n y registrando...'}</span>
                       </>
                     ) : (
                       <>

@@ -37,6 +37,7 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onLogout: () => void;
+  onOpenProfile?: () => void;
   counts: {
     clients: number;
     projects: number;
@@ -53,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapse,
   onLogout,
+  onOpenProfile,
   counts,
 }) => {
   const getInitials = (name: string) => {
@@ -223,13 +225,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Footer / User Profile & Session */}
       <div className="p-3 border-t border-slate-100 space-y-2">
         {!isCollapsed ? (
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+          <div 
+            onClick={onOpenProfile}
+            className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200/70 hover:border-blue-200 transition-all cursor-pointer group"
+            title="Ver perfil completo de usuario"
+          >
             <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1E3A8A] to-[#3B82F6] text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-100 shrink-0 select-none">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1E3A8A] to-[#3B82F6] text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-100 shrink-0 select-none group-hover:ring-blue-400 group-hover:scale-105 transition-all">
                 {getInitials(currentUser.name)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-slate-800 truncate leading-tight">
+                <p className="text-xs font-bold text-slate-800 truncate leading-tight group-hover:text-blue-700 transition-colors">
                   {currentUser.name}
                 </p>
                 <div className="flex items-center space-x-1 mt-0.5">
@@ -247,19 +253,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
         ) : (
-          <div className="flex justify-center mb-1" title={`${currentUser.name} (${currentUser.role})`}>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1E3A8A] to-[#3B82F6] text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-100 shrink-0 select-none">
+          <div 
+            onClick={onOpenProfile}
+            className="flex justify-center mb-1 cursor-pointer" 
+            title={`Ver perfil: ${currentUser.name} (${currentUser.role})`}
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1E3A8A] to-[#3B82F6] text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-100 hover:ring-blue-400 hover:scale-105 transition-all shrink-0 select-none">
               {getInitials(currentUser.name)}
             </div>
           </div>
         )}
 
         <button
-          onClick={() => {
-            if (confirm('¿Desea cerrar la sesión actual de COLORLINK?')) {
-              onLogout();
-            }
-          }}
+          onClick={onLogout}
           className={`w-full flex items-center py-2 px-3 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer ${
             isCollapsed ? 'justify-center' : 'space-x-3'
           }`}

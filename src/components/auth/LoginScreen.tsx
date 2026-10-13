@@ -17,11 +17,9 @@ import {
   ClipboardCheck, 
   HelpCircle,
   X,
-  Send,
-  UserCheck
+  Send
 } from 'lucide-react';
-import { User, UserRole, Client, WelcomeEmailMessage } from '../../types';
-import { CURRENT_USER } from '../../data/initialData';
+import { User, Client, WelcomeEmailMessage } from '../../types';
 import { apiService } from '../../services/apiService';
 import { isSupabaseConfigured } from '../../services/supabaseClient';
 import { UserRegistrationModal } from './UserRegistrationModal';
@@ -55,41 +53,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [isRegistrationModalOpen, setIsRegistrationModalOpen] = useState(false);
   const [registrationNotice, setRegistrationNotice] = useState<{ user: User; email: WelcomeEmailMessage } | null>(null);
   const [isEmailViewerOpen, setIsEmailViewerOpen] = useState(false);
-
-  // Perfiles oficiales de acceso rápido empresarial
-  const officialProfiles = [
-    {
-      role: 'Administrador' as UserRole,
-      title: 'Administrador',
-      name: 'Ing. Carlos Mendoza',
-      email: 'carlos.mendoza@colorlink.tech',
-      desc: 'Gestión total, configuración, clientes, proyectos, inventario y auditoría.',
-      company: 'COLORLINK Enterprise',
-      avatar: CURRENT_USER.avatar,
-      badgeColor: 'bg-purple-100 text-purple-800 border-purple-200'
-    },
-    {
-      role: 'Auditor' as UserRole,
-      title: 'Auditor',
-      name: 'Ing. Laura Pardo',
-      email: 'laura.pardo@colorlink.tech',
-      desc: 'Consulta de proyectos, evidencias SHA-256, trazabilidad NACE y reportes.',
-      company: 'Auditoría Técnica NACE',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
-      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200'
-    },
-    {
-      role: 'Cliente' as UserRole,
-      title: 'Cliente (Empresa)',
-      name: 'Ing. Roberto Silva',
-      email: 'rsilva@petrocaribe.com.co',
-      desc: 'Acceso exclusivo a sus proyectos corporativos, evidencias y reportes.',
-      company: 'Petroquímica del Caribe S.A.',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250',
-      badgeColor: 'bg-blue-100 text-blue-800 border-blue-200'
-    }
-  ];
-
   // Ejecución de inicio de sesión con Supabase Auth
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,22 +69,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       onLoginSuccess(user);
     } catch (err: any) {
       setErrorMessage(err?.message || 'Error al autenticar credenciales en Supabase.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Selección de perfil oficial rápido
-  const handleSelectQuickProfile = async (profile: typeof officialProfiles[0]) => {
-    setEmail(profile.email);
-    setPassword('ColorLink2026*');
-    setErrorMessage(null);
-    try {
-      setIsSubmitting(true);
-      const { user } = await apiService.signInWithPassword(profile.email, 'ColorLink2026*', rememberMe);
-      onLoginSuccess(user);
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Error al iniciar sesión con el perfil seleccionado.');
     } finally {
       setIsSubmitting(false);
     }
@@ -463,51 +410,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               </div>
             </div>
 
-            {/* SECCIÓN OFICIAL DE PERFILES PARA VERIFICACIÓN RÁPIDA (3 ROLES) */}
-            <div className="mt-6 pt-5 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
-                  <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Acceso Rápido por Rol Oficial</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium">
-                  3 Roles Oficiales
-                </span>
-              </div>
 
-              <div className="grid grid-cols-1 gap-2">
-                {officialProfiles.map((p) => (
-                  <button
-                    key={p.role}
-                    type="button"
-                    onClick={() => handleSelectQuickProfile(p)}
-                    className="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-blue-400 bg-slate-50/60 hover:bg-blue-50/40 transition-all flex items-center justify-between group cursor-pointer"
-                  >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-slate-300">
-                        {p.name.replace(/^(Ing\.|Arq\.)\s+/i, '').slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center space-x-2">
-                          <strong className="text-xs text-slate-800 font-bold block truncate group-hover:text-blue-700">
-                            {p.name}
-                          </strong>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${p.badgeColor}`}>
-                            {p.title}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-500 block truncate">
-                          {p.company} • {p.email}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-bold text-blue-600 group-hover:translate-x-0.5 transition-transform shrink-0 ml-2">
-                      Entrar →
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Footer del Formulario */}

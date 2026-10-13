@@ -7,7 +7,8 @@ import {
   Layers, 
   Sparkles,
   AlertTriangle,
-  Building2
+  Building2,
+  LogOut
 } from 'lucide-react';
 import { User, UserRole } from '../../types';
 
@@ -15,6 +16,8 @@ interface NavbarProps {
   currentUser: User;
   onRoleChange: (role: UserRole) => void;
   onOpenNewProjectWizard: () => void;
+  onOpenProfile: () => void;
+  onLogout: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   pendingCount: number;
@@ -25,6 +28,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onRoleChange,
   onOpenNewProjectWizard,
+  onOpenProfile,
+  onLogout,
   searchQuery,
   onSearchChange,
   pendingCount,
@@ -125,16 +130,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           </select>
         </div>
 
-        {/* User avatar & info */}
-        <div className="flex items-center space-x-2.5 pl-2 border-l border-slate-200">
+        {/* User avatar & info clickable button */}
+        <button
+          type="button"
+          onClick={onOpenProfile}
+          className="flex items-center space-x-2.5 pl-2 border-l border-slate-200 hover:bg-slate-50 py-1 px-2.5 rounded-xl transition-all group cursor-pointer text-left ring-1 ring-transparent hover:ring-blue-200 hover:shadow-xs"
+          title="Ver toda la información del perfil corporativo"
+        >
           {/* Avatar con Iniciales Corporativo */}
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1E3A8A] to-[#3B82F6] text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-100 shadow-xs shrink-0 select-none">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1E3A8A] to-[#3B82F6] text-white flex items-center justify-center font-bold text-xs ring-2 ring-blue-100 shadow-xs shrink-0 select-none group-hover:ring-blue-400 group-hover:scale-105 transition-all">
             {getInitials(currentUser.name)}
           </div>
           
-          <div className="hidden lg:block text-left">
+          <div className="hidden sm:block text-left">
             <div className="flex items-center space-x-1.5">
-              <p className="text-xs font-bold text-slate-800 leading-tight">
+              <p className="text-xs font-bold text-slate-800 leading-tight group-hover:text-blue-700 transition-colors">
                 {currentUser.name}
               </p>
               <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border uppercase tracking-wider ${getRoleBadgeColor(currentUser.role)}`}>
@@ -142,7 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
             {currentUser.companyName ? (
-              <p className="text-[10px] text-slate-500 font-medium flex items-center space-x-1 truncate max-w-[160px]">
+              <p className="text-[10px] text-slate-500 font-medium flex items-center space-x-1 truncate max-w-[170px]">
                 <Building2 className="w-3 h-3 text-slate-400 shrink-0 inline mr-0.5" />
                 <span className="truncate">{currentUser.companyName}</span>
               </p>
@@ -152,7 +162,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               </p>
             )}
           </div>
-        </div>
+        </button>
+
+        {/* Botón directo de cerrar sesión en Navbar */}
+        <button
+          type="button"
+          onClick={onLogout}
+          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+          title="Cerrar sesión de COLORLINK"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </header>
   );
